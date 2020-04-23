@@ -5,6 +5,7 @@
 #include <iostream>
 #include <exception>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <winstring.h>
@@ -20,19 +21,21 @@ struct ScopedWinrtInitializer {
 		}
 	}
 	ScopedWinrtInitializer(ScopedWinrtInitializer const&) = delete;
+	ScopedWinrtInitializer& operator=(ScopedWinrtInitializer const&) = delete;
 	~ScopedWinrtInitializer() {
 		RoUninitialize();
 	}
 };
 
 struct ScopedHstring {
-	ScopedHstring(std::wstring const& s) {
-		auto hr = WindowsCreateString(s.c_str(), s.size(), &hstr);
+	ScopedHstring(std::wstring_view s) {
+		auto hr = WindowsCreateString(s.data(), s.size(), &hstr);
 		if (FAILED(hr)) {
 			throw std::runtime_error("WindowsCreateString failed");
 		}
 	}
 	ScopedHstring(ScopedHstring const&) = delete;
+	ScopedHstring& operator=(ScopedHstring const&) = delete;
 	~ScopedHstring() {
 		WindowsDeleteString(hstr);
 	}
@@ -83,7 +86,7 @@ std::vector<std::wstring> preferredLanguages() {
 int main() {
 	ScopedWinrtInitializer ro;
 
-	for (auto const lang : preferredLanguages()) {
+	for (auto const& lang : preferredLanguages()) {
 		std::wcout << lang << std::endl;
 	}
 }
