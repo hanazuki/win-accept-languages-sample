@@ -13,66 +13,77 @@
 #include <windows.system.userprofile.h>
 
 struct ScopedWinrtInitializer {
-    ScopedWinrtInitializer() {
-        auto hr = RoInitialize(RO_INIT_MULTITHREADED);
-        if (FAILED(hr)) {
-            throw std::runtime_error("RoInitialize failed");
-        }
-    }
-    ScopedWinrtInitializer(ScopedWinrtInitializer const&) = delete;
-    ~ScopedWinrtInitializer() {
-        RoUninitialize();
-    }
+	ScopedWinrtInitializer() {
+		auto hr = RoInitialize(RO_INIT_MULTITHREADED);
+		if (FAILED(hr)) {
+			throw std::runtime_error("RoInitialize failed");
+		}
+	}
+	ScopedWinrtInitializer(ScopedWinrtInitializer const&) = delete;
+	~ScopedWinrtInitializer() {
+		RoUninitialize();
+	}
+};
+
+struct ScopedHstring {
+	ScopedHstring(std::wstring const& s) {
+		auto hr = WindowsCreateString(s.c_str(), s.size(), &hstr);
+		if (FAILED(hr)) {
+			throw std::runtime_error("WindowsCreateString failed");
+		}
+	}
+	ScopedHstring(ScopedHstring const&) = delete;
+	~ScopedHstring() {
+		WindowsDeleteString(hstr);
+	}
+	operator HSTRING() {
+		return hstr;
+	}
+
+private:
+	HSTRING hstr;
 };
 
 std::vector<std::wstring> preferredLanguages() {
-    using namespace ABI::Windows::System::UserProfile;
-    using Microsoft::WRL::ComPtr;
+	using namespace ABI::Windows::System::UserProfile;
+	using Microsoft::WRL::ComPtr;
 
-    HSTRING klass;
-    auto hr = WindowsCreateString(RuntimeClass_Windows_System_UserProfile_GlobalizationPreferences,
-        lstrlenW(RuntimeClass_Windows_System_UserProfile_GlobalizationPreferences),
-        &klass);
-    if (FAILED(hr)) {
-        throw std::runtime_error("WindowsCreateString failed");
-    }
+	ComPtr<IGlobalizationPreferencesStatics> prefs;
+	auto hr = RoGetActivationFactory(ScopedHstring{ RuntimeClass_Windows_System_UserProfile_GlobalizationPreferences }, IID_PPV_ARGS(&prefs));
+	if (FAILED(hr)) {
+		throw std::runtime_error("RoGetActivationFactory failed");
+	}
 
-    ComPtr<IGlobalizationPreferencesStatics> prefs;
-    hr = RoGetActivationFactory(klass, IID_PPV_ARGS(&prefs));
-    if (FAILED(hr)) {
-        throw std::runtime_error("RoGetActivationFactory failed");
-    }
+	ABI::Windows::Foundation::Collections::IVectorView<HSTRING>* langs;
+	hr = prefs->get_Languages(&langs);
+	if (FAILED(hr)) {
+		throw std::runtime_error("GlobalizationPreferences::get_Languages failed");
+	}
 
-    ABI::Windows::Foundation::Collections::IVectorView<HSTRING> *langs;
-    hr = prefs->get_Languages(&langs);
-    if (FAILED(hr)) {
-        throw std::runtime_error("GlobalizationPreferences::get_Languages failed");
-    }
+	unsigned size;
+	hr = langs->get_Size(&size);
+	if (FAILED(hr)) {
+		throw std::runtime_error("get_Size failed");
+	}
 
-    unsigned size;
-    hr = langs->get_Size(&size);
-    if (FAILED(hr)) {
-        throw std::runtime_error("get_Size failed");
-    }
+	std::vector<std::wstring> result;
+	for (unsigned i = 0; i < size; ++i) {
+		HSTRING s;
+		hr = langs->GetAt(i, &s);
+		if (SUCCEEDED(hr)) {
+			UINT32 len;
+			auto p = WindowsGetStringRawBuffer(s, &len);
+			result.emplace_back(p, len);
+		}
+	}
 
-    std::vector<std::wstring> result;
-    for (unsigned i = 0; i < size; ++i) {
-        HSTRING s;
-        hr = langs->GetAt(i, &s);
-        if (SUCCEEDED(hr)) {
-            UINT32 len;
-            auto p = WindowsGetStringRawBuffer(s, &len);
-            result.emplace_back(p, len);
-        }
-    }
-
-    return result;
+	return result;
 }
 
 int main() {
-    ScopedWinrtInitializer ro;
+	ScopedWinrtInitializer ro;
 
-    for(auto const lang: preferredLanguages()) {
-        std::wcout << lang << std::endl;
-    }
+	for (auto const lang : preferredLanguages()) {
+		std::wcout << lang << std::endl;
+	}
 }
