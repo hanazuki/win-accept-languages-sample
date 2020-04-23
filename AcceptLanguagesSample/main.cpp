@@ -1,4 +1,5 @@
 // Sample application to display Preferred Languages settings in Windows 10
+// SPDX-License-Identifier: CC0-1.0
 
 #pragma comment(lib,"runtimeobject")
 
